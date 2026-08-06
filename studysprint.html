@@ -1,0 +1,2156 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="google-site-verification" content="FKYGve-MfemDltQVxzjFYll5fejmDtHxM0EA3WFDdjQ"/>
+<title>STUDYSPRINT</title>
+<link rel="stylesheet" href="studystyles.css" />
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDJ0G4V7PPBT-fcnO9X-jWmqFk5VBUfJlg",
+    authDomain: "studysprint-ke.firebaseapp.com",
+    projectId: "studysprint-ke",
+    storageBucket: "studysprint-ke.firebasestorage.app",
+    messagingSenderId: "460778528637",
+    appId: "1:460778528637:web:c862fd7c53306ab4f1f614"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  // Keep user logged in across browser sessions (persist in localStorage)
+  setPersistence(auth, browserLocalPersistence);
+
+  // Expose to global scope
+  window._fbAuth = auth;
+  window._fbDb = db;
+  window._fbCreateUser = createUserWithEmailAndPassword;
+  window._fbSignIn = signInWithEmailAndPassword;
+  window._fbSignOut = signOut;
+  window._fbOnAuthStateChanged = onAuthStateChanged;
+  window._fbSendPasswordResetEmail = sendPasswordResetEmail;
+  window._fbDoc = doc;
+  window._fbSetDoc = setDoc;
+  window._fbGetDoc = getDoc;
+
+  // Auth state observer — restore session on every page load/refresh
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      let uid = user.uid;
+      // Always set currentUser from Firebase — this is the source of truth
+      localStorage.setItem("currentUser", uid);
+      // Wait for DOM + regular script to be ready, then restore UI
+      const tryLoad = setInterval(() => {
+        if (typeof loadUserData === "function" && typeof showMainPage === "function") {
+          clearInterval(tryLoad);
+          let users = JSON.parse(localStorage.getItem("users")) || {};
+          if (users[uid]) {
+            loadUserData(users[uid], uid);
+            showMainPage();
+            updateLogoutState();
+            // No welcome popup on session restore
+          }
+        }
+      }, 80);
+    } else {
+      // No Firebase session — clear any stale localStorage
+      localStorage.removeItem("currentUser");
+    }
+  });
+</script>
+</head>
+<body>
+<!-- SPLASH SCREEN -->
+<div id="splashScreen">
+  <img src="https://user2918.na.imgto.link/public/20260402/1000390541.avif" class="splash-logo">
+  <h2 class="splash-text">STUDYSPRINT</h2>
+</div>
+<!-- LOGIN PAGE -->
+<div id="loginPage">
+  <div class="login-wrapper">
+    <img src="https://user2918.na.imgto.link/public/20260402/1000390541.avif" class="logo">
+    <h2 class="splash-text">STUDYSPRINT</h2>
+    <div class="blue-line"></div>
+    <!-- LOGIN FORM -->
+    <div id="loginForm">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="text" id="loginIdentifier" placeholder="e.g. studysprintke@gmail.com">
+        <div class="error-text" id="loginIdentifierError">Please fill this field</div>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="password-box">
+          <input type="password" id="loginPassword" placeholder="Password">
+          <span class="eye" onclick="togglePass('loginPassword',this)">👁️</span>
+        </div>
+        <div class="error-text" id="loginPasswordError">Please fill this field</div>
+      </div>
+      <p style="text-align:right; margin-bottom:15px;">
+        <span onclick="forgotPassword()" style="color:#1d4ed8; cursor:pointer; font-size:14px;">Forgot Password?</span>
+      </p>
+      <button class="login-btn" onclick="handleLogin()">Login</button>
+      <p style="margin-top:15px;text-align:center;">
+        Don't have an account?
+        <span onclick="showSignup()" style="color:#16a34a;font-weight:bold;cursor:pointer;">Sign Up</span>
+      </p>
+    </div>
+    <!-- WELCOME / SIGNUP INFO SECTION -->
+    <div id="signupForm" style="display:none; text-align:center;">
+      <h2 style="color:#1d4ed8; margin-bottom:10px;">WELCOME TO STUDYSPRINT</h2>
+      <p style="font-size:16px; color:#333; margin-bottom:20px; line-height:1.5;">
+        We provide high-quality notes, past papers, and study resources
+        from universities across the country.<br><br>
+        Create your free account today and get instant access to
+        academic materials designed to boost your success.
+      </p>
+      <button class="login-btn" onclick="openRegisterForm()" style="background:#16a34a;">
+        Create Account
+      </button>
+      <p style="margin-top:15px;">
+        <span onclick="showLogin()" style="color:#1d4ed8; cursor:pointer; font-weight:bold;">Back to Login</span>
+      </p>
+    </div>
+    <!-- REGISTER FORM -->
+    <div id="registerForm" style="display:none;" class="register-form">
+      <h2 style="color:#1d4ed8; margin-bottom:15px; text-align:center;">Create Account</h2>
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" id="regName" placeholder="Your Full Name">
+        <div class="error-text" id="regNameError">Please enter your name</div>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="regEmailPrefix" placeholder="e.g. studysprintke@gmail.com">
+        <div class="error-text" id="regEmailError">Please enter a valid email address</div>
+      </div>
+      <div class="form-group">
+        <label>Phone Number</label>
+        <input type="number" id="regPhone" placeholder="07XXXXXXXX">
+        <div class="error-text" id="regPhoneError">Please enter your phone number</div>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="password-box">
+          <input type="password" id="regPassword" placeholder="Create Password">
+          <span class="eye" onclick="togglePass('regPassword',this)">👁️</span>
+        </div>
+        <div class="error-text" id="regPasswordError">Please enter a password</div>
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <div class="password-box">
+        <input type="password" id="regConfirmPassword" placeholder="Confirm Password">
+        <span class="eye" onclick="togglePass('regConfirmPassword',this)">👁️</span>
+        </div>
+        <div class="error-text" id="regConfirmPasswordError">Passwords do not match</div>
+      </div>
+      <button class="login-btn" onclick="handleRegister()" style="background:#16a34a;">Register</button>
+      <p style="margin-top:15px; text-align:center;">
+        <span onclick="showLogin()" style="color:#1d4ed8; cursor:pointer; font-weight:bold;">Back to Login</span>
+      </p>
+    </div>
+
+  </div>
+</div>
+
+<!-- MAIN PAGE -->
+<header id="mainHeader">
+  <h1>STUDYSPRINT</h1>
+  <p>Download Notes, Past Papers &amp; Study Materials</p>
+</header>
+<div class="top-bar" id="mainTopBar">
+  <input type="text" id="search" placeholder="Search e.g Maths 100" onkeyup="searchFiles()">
+  <button id="profileBtn" onclick="openProfile()">👤</button>
+  <button id="logoutBtn" onclick="logout()" style="background:var(--gradient);color:white;border:none;border-radius:8px;padding:8px 12px;cursor:pointer;">Logout</button>
+</div>
+<div id="unlockSection">
+  <nav id="mainNav"></nav>
+  <div class="category-bar" id="categoryBar">
+    <button onclick="filterCategory('notes',this)" class="active">Notes</button>
+    <button onclick="filterCategory('past-papers',this)">Past Papers</button>
+    <button onclick="filterCategory('others',this)">Others</button>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="container" id="mainContainer">
+
+    <!-- HOME: University Selection Grid -->
+    <div id="uniHome">
+      <div style="text-align:center;padding:10px 0 18px;">
+        <h2 style="color:#1d4ed8;font-size:20px;">Select Your University</h2>
+        <p style="color:#666;font-size:13px;margin-top:4px;">Tap a logo to access revision materials</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px;padding:0 4px 20px;">
+
+        <div class="uni-card" onclick="showUniHub('egerton')">
+          <img src="https://user12656.na.imgto.link/public/20260612/95584.avif" class="uni-logo" onerror="this.src='https://ui-avatars.com/api/?name=EU&background=1d4ed8&color=fff&size=100'">
+          <p class="uni-name">EGERTON<br>UNIVERSITY</p>
+        </div>
+
+        <div class="uni-card" onclick="showUniHub('kenyatta')">
+          <img src="https://user12656.na.imgto.link/public/20260612/95585-1.avif" class="uni-logo" onerror="this.src='https://ui-avatars.com/api/?name=KU&background=8B0000&color=fff&size=100'">
+          <p class="uni-name">KENYATTA<br>UNIVERSITY</p>
+        </div>
+
+        <div class="uni-card" onclick="showUniHub('maseno')">
+          <img src="https://user12656.na.imgto.link/public/20260612/95588.avif" class="uni-logo" onerror="this.src='https://ui-avatars.com/api/?name=MU&background=003366&color=fff&size=100'">
+          <p class="uni-name">MASENO<br>UNIVERSITY</p>
+        </div>
+
+        <div class="uni-card" onclick="showUniHub('karatina')">
+          <img src="https://user12656.na.imgto.link/public/20260612/95589.avif" class="uni-logo" onerror="this.src='https://ui-avatars.com/api/?name=KaU&background=2d6a4f&color=fff&size=100'">
+          <p class="uni-name">KARATINA<br>UNIVERSITY</p>
+        </div>
+
+        <div class="uni-card" onclick="showUniHub('chuka')">
+          <img src="https://user12656.na.imgto.link/public/20260612/95586.avif" class="uni-logo" onerror="this.src='https://ui-avatars.com/api/?name=CU&background=b5451b&color=fff&size=100'">
+          <p class="uni-name">CHUKA<br>UNIVERSITY</p>
+        </div>
+
+        <div class="uni-card" onclick="showUniHub('jkuat')">
+          <img src="https://user12656.na.imgto.link/public/20260612/95590.avif" class="uni-logo" onerror="this.src='https://ui-avatars.com/api/?name=JK&background=1a1a2e&color=fff&size=100'">
+          <p class="uni-name">JKUAT</p>
+        </div>
+
+        <div class="uni-card" onclick="showUniHub('kisii')">
+          <img src="https://user12656.na.imgto.link/public/20260612/95587.avif" class="uni-logo" onerror="this.src='https://ui-avatars.com/api/?name=KsU&background=4a0080&color=fff&size=100'">
+          <p class="uni-name">KISII<br>UNIVERSITY</p>
+        </div>
+        <div class="uni-card" onclick="showUniHub('moi')">
+          <img src="https://user12656.na.imgto.link/public/20260612/95591.avif" class="uni-logo" onerror="this.src='https://ui-avatars.com/api/?name=KsU&background=4a0080&color=fff&size=100'">
+          <p class="uni-name">MOI<br>UNIVERSITY</p>
+        </div>
+
+      </div>
+    </div>
+    
+      </div>
+    </div>
+
+    <!-- ===== EGERTON UNIVERSITY HUB ===== -->
+    <div id="hub-egerton" class="uni-hub" style="display:none;">
+  <div class="hub-header">
+    <button class="back-btn" onclick="backToHome()">← Back</button>
+    <h3>EGERTON UNIVERSITY REVISION HUB</h3>
+  </div>
+
+  <div class="course">
+    <div class="coming-soon-box" id="comingsoon-egerton">
+      
+      <div class="book-icon">📚</div>
+
+      <h2>Official Launch Coming Soon!</h2>
+
+      <p class="launch-text">
+        The <b>Egerton University Revision Hub</b> will officially launch on
+        <span>30th August 2026</span>.
+      </p>
+
+      <p class="upload-text">
+        Uploading and organization of revision materials will be completed on
+        <span>25th August 2026</span>.
+      </p>
+
+      <!-- Loading Animation -->
+      <div class="loading-section">
+        <div class="loading-circle"></div>
+        <p>Uploading materials<span class="dots"></span></p>
+      </div>
+
+      <!-- Progress Line -->
+      <div class="progress-container">
+        <div class="progress-line"></div>
+      </div>
+
+      <div class="mini-note">
+        Please stay tuned as we prepare high-quality revision resources for all students.
+      </div>
+
+    </div>
+
+    <div id="docwrap-egerton" style="display:none;">
+      <div class="category-video" id="video-egerton" style="text-align:center;margin-bottom:20px;"></div>
+      <ul id="doclist-egerton"></ul>
+    </div>
+  </div>
+</div>
+    <!-- ===== KENYATTA UNIVERSITY HUB ===== -->
+    <div id="hub-kenyatta" class="uni-hub" style="display:none;">
+      <div class="hub-header">
+        <button class="back-btn" onclick="backToHome()">← Back</button>
+        <h3>KENYATTA UNIVERSITY REVISION HUB</h3>
+      </div>
+<div class="course">
+    <div class="coming-soon-box" id="comingsoon-kenyatta">
+      
+      <div class="book-icon">📚</div>
+
+      <h2>Official Launch Coming Soon!</h2>
+
+      <p class="launch-text">
+        The <b>Kenyatta University Revision Hub</b> will officially launch on
+        <span>30th August 2026</span>.
+      </p>
+
+      <p class="upload-text">
+        Uploading and organization of revision materials will be completed on
+        <span>25th August 2026</span>.
+      </p>
+
+      <!-- Loading Animation -->
+      <div class="loading-section">
+        <div class="loading-circle"></div>
+        <p>Uploading materials<span class="dots"></span></p>
+      </div>
+
+      <!-- Progress Line -->
+      <div class="progress-container">
+        <div class="progress-line"></div>
+      </div>
+
+      <div class="mini-note">
+        Please stay tuned as we prepare high-quality revision resources for all students.
+      </div>
+
+    </div>
+
+    <div id="docwrap-kenyatta" style="display:none;">
+      <div class="category-video" id="video-kenyatta" style="text-align:center;margin-bottom:20px;"></div>
+      <ul id="doclist-kenyatta"></ul>
+    </div>
+  </div>
+</div>
+
+    <!-- ===== MASENO UNIVERSITY HUB ===== -->
+    <div id="hub-maseno" class="uni-hub" style="display:none;">
+      <div class="hub-header">
+        <button class="back-btn" onclick="backToHome()">← Back</button>
+        <h3>MASENO UNIVERSITY REVISION HUB</h3>
+      </div>
+<div class="course">
+    <div class="coming-soon-box" id="comingsoon-maseno">
+      
+      <div class="book-icon">📚</div>
+
+      <h2>Official Launch Coming Soon!</h2>
+
+      <p class="launch-text">
+        The <b>Maseno University Revision Hub</b> will officially launch on
+        <span>30th August 2026</span>.
+      </p>
+
+      <p class="upload-text">
+        Uploading and organization of revision materials will be completed on
+        <span>25th August 2026</span>.
+      </p>
+
+      <!-- Loading Animation -->
+      <div class="loading-section">
+        <div class="loading-circle"></div>
+        <p>Uploading materials<span class="dots"></span></p>
+      </div>
+
+      <!-- Progress Line -->
+      <div class="progress-container">
+        <div class="progress-line"></div>
+      </div>
+
+      <div class="mini-note">
+        Please stay tuned as we prepare high-quality revision resources for all students.
+      </div>
+
+    </div>
+
+    <div id="docwrap-maseno" style="display:none;">
+      <div class="category-video" id="video-maseno" style="text-align:center;margin-bottom:20px;"></div>
+      <ul id="doclist-maseno"></ul>
+    </div>
+  </div>
+</div>
+    <!-- ===== KARATINA UNIVERSITY HUB ===== -->
+    <div id="hub-karatina" class="uni-hub" style="display:none;">
+      <div class="hub-header">
+        <button class="back-btn" onclick="backToHome()">← Back</button>
+        <h3>KARATINA UNIVERSITY REVISION HUB</h3>
+      </div>
+<div class="course">
+    <div class="coming-soon-box" id="comingsoon-karatina">
+      
+    <div class="book-icon">📚</div>
+      <h2>Official Launch Coming Soon!</h2>
+
+      <p class="launch-text">
+        The <b>Karatina University Revision Hub</b> will officially launch on
+        <span>30th August 2026</span>.
+      </p>
+
+      <p class="upload-text">
+        Uploading and organization of revision materials will be completed on
+        <span>25th August 2026</span>.
+      </p>
+
+      <!-- Loading Animation -->
+      <div class="loading-section">
+        <div class="loading-circle"></div>
+        <p>Uploading materials<span class="dots"></span></p>
+      </div>
+
+      <!-- Progress Line -->
+      <div class="progress-container">
+        <div class="progress-line"></div>
+      </div>
+
+      <div class="mini-note">
+        Please stay tuned as we prepare high-quality revision resources for all students.
+      </div>
+
+    </div>
+
+    <div id="docwrap-karatina" style="display:none;">
+      <div class="category-video" id="video-karatina" style="text-align:center;margin-bottom:20px;"></div>
+      <ul id="doclist-karatina"></ul>
+    </div>
+  </div>
+</div>
+
+    <!-- ===== CHUKA UNIVERSITY HUB ===== -->
+    <div id="hub-chuka" class="uni-hub" style="display:none;">
+      <div class="hub-header">
+        <button class="back-btn" onclick="backToHome()">← Back</button>
+        <h3>CHUKA UNIVERSITY REVISION HUB</h3>
+      </div>
+<div class="course">
+    <div class="coming-soon-box" id="comingsoon-chuka">
+      
+      <div class="book-icon">📚</div>
+
+      <h2>Official Launch Coming Soon!</h2>
+
+      <p class="launch-text">
+        The <b>Chuka University Revision Hub</b> will officially launch on
+        <span>30th August 2026</span>.
+      </p>
+
+      <p class="upload-text">
+        Uploading and organization of revision materials will be completed on
+        <span>25th August 2026</span>.
+      </p>
+
+      <!-- Loading Animation -->
+      <div class="loading-section">
+        <div class="loading-circle"></div>
+        <p>Uploading materials<span class="dots"></span></p>
+      </div>
+
+      <!-- Progress Line -->
+      <div class="progress-container">
+        <div class="progress-line"></div>
+      </div>
+
+      <div class="mini-note">
+        Please stay tuned as we prepare high-quality revision resources for all students.
+      </div>
+
+    </div>
+
+    <div id="docwrap-chuka" style="display:none;">
+      <div class="category-video" id="video-chuka" style="text-align:center;margin-bottom:20px;"></div>
+      <ul id="doclist-chuka"></ul>
+    </div>
+  </div>
+</div>
+
+    <!-- ===== JKUAT HUB ===== -->
+    <div id="hub-jkuat" class="uni-hub" style="display:none;">
+      <div class="hub-header">
+        <button class="back-btn" onclick="backToHome()">← Back</button>
+        <h3>JKUAT REVISION HUB</h3>
+      </div>
+      <div class="course">
+    <div class="coming-soon-box" id="comingsoon-jkuat">
+      
+      <div class="book-icon">📚</div>
+
+      <h2>Official Launch Coming Soon!</h2>
+
+      <p class="launch-text">
+        The <b> JKUAT Revision Hub</b> will officially launch on
+        <span>30th August 2026</span>.
+      </p>
+
+      <p class="upload-text">
+        Uploading and organization of revision materials will be completed on
+        <span>25th August 2026</span>.
+      </p>
+
+      <!-- Loading Animation -->
+      <div class="loading-section">
+        <div class="loading-circle"></div>
+        <p>Uploading materials<span class="dots"></span></p>
+      </div>
+
+      <!-- Progress Line -->
+      <div class="progress-container">
+        <div class="progress-line"></div>
+      </div>
+
+      <div class="mini-note">
+        Please stay tuned as we prepare high-quality revision resources for all students.
+      </div>
+
+    </div>
+
+    <div id="docwrap-jkuat" style="display:none;">
+      <div class="category-video" id="video-jkuat" style="text-align:center;margin-bottom:20px;"></div>
+      <ul id="doclist-jkuat"></ul>
+    </div>
+  </div>
+</div>
+    <!-- ===== MOI UNIVERSITY HUB ===== -->
+    <div id="hub-moi" class="uni-hub" style="display:none;">
+  <div class="hub-header">
+    <button class="back-btn" onclick="backToHome()">← Back</button>
+    <h3>MOI UNIVERSITY REVISION HUB</h3>
+  </div>
+
+  <div class="course">
+    <div class="coming-soon-box" id="comingsoon-moi">
+      
+      <div class="book-icon">📚</div>
+
+      <h2>Official Launch Coming Soon!</h2>
+
+      <p class="launch-text">
+        The <b>Moi University Revision Hub</b> will officially launch on
+        <span>30th August 2026</span>.
+      </p>
+
+      <p class="upload-text">
+        Uploading and organization of revision materials will be completed on
+        <span>25th August 2026</span>.
+      </p>
+
+      <!-- Loading Animation -->
+      <div class="loading-section">
+        <div class="loading-circle"></div>
+        <p>Uploading materials<span class="dots"></span></p>
+      </div>
+
+      <!-- Progress Line -->
+      <div class="progress-container">
+        <div class="progress-line"></div>
+      </div>
+
+      <div class="mini-note">
+        Please stay tuned as we prepare high-quality revision resources for all students.
+      </div>
+
+    </div>
+
+    <div id="docwrap-moi" style="display:none;">
+      <div class="category-video" id="video-moi" style="text-align:center;margin-bottom:20px;"></div>
+      <ul id="doclist-moi"></ul>
+    </div>
+  </div>
+</div>
+    <!-- ===== KISII UNIVERSITY HUB ===== -->
+    <div id="hub-kisii" class="uni-hub" style="display:none;">
+      <div class="hub-header">
+        <button class="back-btn" onclick="backToHome()">← Back</button>
+        <h3>KISII UNIVERSITY REVISION HUB</h3>
+      </div>
+      <div class="course">
+    <div class="coming-soon-box" id="comingsoon-kisii">
+      
+      <div class="book-icon">📚</div>
+
+      <h2>Official Launch Coming Soon!</h2>
+
+      <p class="launch-text">
+        The <b>Kisii University Revision Hub</b> will officially launch on
+        <span>30th August 2026</span>.
+      </p>
+
+      <p class="upload-text">
+        Uploading and organization of revision materials will be completed on
+        <span>25th August 2026</span>.
+      </p>
+
+      <!-- Loading Animation -->
+      <div class="loading-section">
+        <div class="loading-circle"></div>
+        <p>Uploading materials<span class="dots"></span></p>
+      </div>
+
+      <!-- Progress Line -->
+      <div class="progress-container">
+        <div class="progress-line"></div>
+      </div>
+
+      <div class="mini-note">
+        Please stay tuned as we prepare high-quality revision resources for all students.
+      </div>
+
+    </div>
+
+    <div id="docwrap-kisii" style="display:none;">
+      <div class="category-video" id="video-kisii" style="text-align:center;margin-bottom:20px;"></div>
+      <ul id="doclist-kisii"></ul>
+    </div>
+  </div>
+</div>
+
+  </div>
+
+  <!-- PROFILE SECTION -->
+  <div id="profileSection" style="display:none; padding:0; background:#f0f4ff; min-height:100vh;">
+
+    <!-- Profile Hero Banner -->
+    <div style="background:linear-gradient(135deg,#1d4ed8,#0ea5e9);padding:24px 20px 60px;position:relative;text-align:center;">
+      <button onclick="goBack()" style="position:absolute;left:14px;top:14px;background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:7px 13px;cursor:pointer;font-size:13px;font-weight:600;">← Back</button>
+      <p style="color:rgba(255,255,255,0.85);font-size:13px;margin-bottom:6px;letter-spacing:1px;">MY ACCOUNT</p>
+      <h2 style="color:white;font-size:22px;margin:0;">Profile &amp; Activity</h2>
+    </div>
+
+    <!-- Avatar Card (overlapping banner) -->
+    <div style="max-width:520px;margin:-44px auto 0;padding:0 14px;position:relative;z-index:2;">
+      <div style="background:white;border-radius:20px;padding:20px 20px 16px;box-shadow:0 8px 32px rgba(29,78,216,0.13);text-align:center;">
+        <div style="position:relative;display:inline-block;margin-bottom:10px;">
+          <img id="profilePic" src="https://user2918.na.imgto.link/public/20260402/1000386222.avif"
+               style="width:90px;height:90px;border-radius:50%;object-fit:cover;border:4px solid #e0e7ff;cursor:pointer;"
+               onclick="selectProfilePic()">
+          <div onclick="selectProfilePic()" style="position:absolute;bottom:2px;right:2px;background:#1d4ed8;color:white;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;border:2px solid white;">✏️</div>
+          <input type="file" id="fileInput" hidden onchange="loadProfilePic(event)">
+        </div>
+        <h3 id="profileDisplayName" style="color:#1e293b;font-size:18px;margin:0 0 3px;">Student</h3>
+        <p id="profileDisplayEmail" style="color:#64748b;font-size:13px;margin:0 0 10px;"></p>
+        <!-- Subscription Badge -->
+        <div id="subBadge" style="display:inline-flex;align-items:center;gap:6px;background:#f0fdf4;border:1px solid #86efac;border-radius:20px;padding:5px 14px;font-size:12px;font-weight:700;color:#15803d;">
+          <span>🔓</span><span id="subBadgeText">Free Plan</span>
+        </div>
+      </div>
+
+      <!-- Tab Switcher -->
+      <div style="display:flex;background:white;border-radius:14px;margin-top:14px;padding:5px;gap:4px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+        <button id="tabInfoBtn" onclick="switchProfileTab('info')" style="flex:1;padding:9px 6px;border:none;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;background:linear-gradient(135deg,#1d4ed8,#0ea5e9);color:white;transition:0.2s;">👤 Info</button>
+        <button id="tabSecBtn" onclick="switchProfileTab('security')" style="flex:1;padding:9px 6px;border:none;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;background:transparent;color:#64748b;transition:0.2s;">🔒 Security</button>
+        <button id="tabActBtn" onclick="switchProfileTab('activity')" style="flex:1;padding:9px 6px;border:none;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;background:transparent;color:#64748b;transition:0.2s;">📊 Activity</button>
+      </div>
+
+      <!-- TAB: INFO -->
+      <div id="tabInfo" style="margin-top:14px;">
+        <div style="background:white;border-radius:16px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+          <p style="font-size:11px;font-weight:800;color:#94a3b8;letter-spacing:1.5px;margin-bottom:14px;">PERSONAL INFORMATION</p>
+
+          <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px;">Full Name</label>
+          <input type="text" id="profileName" placeholder="Your Full Name" style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid #e2e8f0;font-size:14px;margin-bottom:12px;background:#f8fafc;box-sizing:border-box;">
+
+          <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px;">Email Address</label>
+          <input type="text" id="profileEmail" disabled placeholder="Email" style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid #e2e8f0;font-size:14px;margin-bottom:12px;background:#f1f5f9;color:#94a3b8;box-sizing:border-box;">
+
+          <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px;">Phone Number</label>
+          <input type="number" id="profilePhone" placeholder="07XXXXXXXX" style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid #e2e8f0;font-size:14px;margin-bottom:12px;background:#f8fafc;box-sizing:border-box;">
+
+          <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px;">University</label>
+          <input type="text" id="profileUni" placeholder="Your University" style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid #e2e8f0;font-size:14px;margin-bottom:12px;background:#f8fafc;box-sizing:border-box;">
+
+          <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px;">Year of Study</label>
+          <input type="text" id="profileYear" placeholder="e.g. Year 2" style="width:100%;padding:11px 14px;border-radius:10px;border:1.5px solid #e2e8f0;font-size:14px;margin-bottom:16px;background:#f8fafc;box-sizing:border-box;">
+
+          <input type="text" id="profileReg" disabled style="display:none;">
+
+          <button onclick="saveProfile()" style="width:100%;padding:13px;background:linear-gradient(135deg,#1d4ed8,#0ea5e9);border:none;border-radius:12px;color:white;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(29,78,216,0.3);">💾 Save Changes</button>
+        </div>
+
+        <!-- Subscription Info Card -->
+        <div style="background:white;border-radius:16px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-top:14px;">
+          <p style="font-size:11px;font-weight:800;color:#94a3b8;letter-spacing:1.5px;margin-bottom:14px;">SUBSCRIPTION STATUS</p>
+          <div id="subInfoCard"></div>
+        </div>
+      </div>
+         <!-- TAB: SECURITY -->
+      <div id="tabSecurity" style="display:none;margin-top:14px;">
+  <div style="background:white;border-radius:16px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+    <p style="font-size:11px;font-weight:800;color:#94a3b8;letter-spacing:1.5px;margin-bottom:14px;">CHANGE PASSWORD</p>
+
+    <!-- Current Password -->
+    <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px;">Current Password</label>
+    <div style="position:relative;margin-bottom:12px;">
+      <input type="password" id="currentPassword" placeholder="Enter current password" style="width:100%;padding:11px 40px 11px 14px;border-radius:10px;border:1.5px solid #e2e8f0;font-size:14px;background:#f8fafc;box-sizing:border-box;">
+      <span class="eye" onclick="togglePass('currentPassword',this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;">👁️</span>
+    </div>
+    <p style="text-align:right; margin-bottom:15px;">
+      <span onclick="forgotPassword()" style="color:#1d4ed8; cursor:pointer; font-size:14px;">Forgot Password?</span>
+    </p>
+
+    <!-- New Password -->
+    <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px;">New Password</label>
+    <div style="position:relative;margin-bottom:12px;">
+      <input type="password" id="newPassword" placeholder="Enter new password" style="width:100%;padding:11px 40px 11px 14px;border-radius:10px;border:1.5px solid #e2e8f0;font-size:14px;background:#f8fafc;box-sizing:border-box;">
+      <span class="eye" onclick="togglePass('newPassword',this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;">👁️</span>
+    </div>
+
+    <!-- Confirm New Password -->
+    <label style="font-size:12px;font-weight:600;color:#64748b;display:block;margin-bottom:4px;">Confirm New Password</label>
+    <div style="position:relative;margin-bottom:16px;">
+      <input type="password" id="confirmNewPassword" placeholder="Confirm new password" style="width:100%;padding:11px 40px 11px 14px;border-radius:10px;border:1.5px solid #e2e8f0;font-size:14px;background:#f8fafc;box-sizing:border-box;">
+      <span class="eye" onclick="togglePass('confirmNewPassword',this)" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;">👁️</span>
+    </div>
+
+    <button onclick="saveProfile()" style="width:100%;padding:13px;background:linear-gradient(135deg,#1d4ed8,#0ea5e9);border:none;border-radius:12px;color:white;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(29,78,216,0.3);">🔐 Update Password</button>
+  </div>
+</div>
+
+
+        <!-- Login Activity -->
+        <div style="background:white;border-radius:16px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-top:14px;">
+          <p style="font-size:11px;font-weight:800;color:#94a3b8;letter-spacing:1.5px;margin-bottom:14px;">LOGIN ACTIVITY</p>
+          <div id="loginActivityList" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+      </div>
+
+      <!-- TAB: ACTIVITY -->
+      <div id="tabActivity" style="display:none;margin-top:14px;">
+
+        <!-- Stats Row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+          <div style="background:white;border-radius:14px;padding:14px 8px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+            <div id="statDownloads" style="font-size:24px;font-weight:900;color:#1d4ed8;">0</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Downloads</div>
+          </div>
+          <div style="background:white;border-radius:14px;padding:14px 8px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+            <div id="statLogins" style="font-size:24px;font-weight:900;color:#0ea5e9;">0</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Logins</div>
+          </div>
+          <div style="background:white;border-radius:14px;padding:14px 8px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.06);">
+            <div id="statPayments" style="font-size:24px;font-weight:900;color:#16a34a;">0</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px;">Payments</div>
+          </div>
+        </div>
+
+        <!-- Payment History -->
+        <div style="background:white;border-radius:16px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:14px;">
+          <p style="font-size:11px;font-weight:800;color:#94a3b8;letter-spacing:1.5px;margin-bottom:14px;">💳 PAYMENT HISTORY</p>
+          <div id="paymentHistoryList" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+
+        <!-- Recent Activity Feed -->
+        <div style="background:white;border-radius:16px;padding:18px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:20px;">
+          <p style="font-size:11px;font-weight:800;color:#94a3b8;letter-spacing:1.5px;margin-bottom:14px;">📋 RECENT ACTIVITY</p>
+          <div id="recentActivityList" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGINATION -->
+  <div id="pagination" style="text-align:center;margin:20px 0;display:none;">
+    <button onclick="prevPage()" id="prevBtn">⬅ Prev</button>
+    <span id="pageInfo">Page 1</span>
+    <button onclick="nextPage()" id="nextBtn">Next ➡</button>
+  </div>
+</div>
+
+<!-- CONTACT SUPPORT BUTTON -->
+<div style="text-align:center; margin:20px; display:none;" id="contactBtnWrapper">
+  <button onclick="openContactForm()"
+    style="padding:12px 20px; border:none; border-radius:8px;
+    background:linear-gradient(90deg,#22c55e,#16a34a);
+    color:white; font-size:16px; cursor:pointer;">📩 Contact Support</button>
+</div>
+
+<!-- SOCIAL -->
+<div class="social-bar" id="socialBar">
+  <p>Follow us on social media</p>
+  <div class="social-icons">
+    <a href="https://www.facebook.com/profile.php?id=61591451738075" target="_blank">
+      <img src="https://cdn-icons-png.flaticon.com/512/733/733547.png">
+    </a>
+    <a href="https://www.instagram.com/studysprintke?igsh=bXFmZTZteWt0aWto" target="_blank">
+      <img src="https://cdn-icons-png.flaticon.com/512/2111/2111463.png">
+    </a>
+    <a href="https://www.tiktok.com/@studysprint1?_r=1&_t=ZS-95HhF9dlkkT" target="_blank">
+      <img src="https://cdn-icons-png.flaticon.com/512/3046/3046126.png">
+    </a>
+  </div>
+</div>
+<footer id="mainFooter">
+  © 2026 Studysprint //Yusuf JW
+</footer>
+
+<!-- SUCCESS POPUP -->
+<div id="successPopup" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:10000;justify-content:center;align-items:center;">
+  <div style="background:white;padding:25px;border-radius:12px;max-width:400px;width:90%;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.2);">
+    <h2 style="color:#16a34a;">✅ Code Accepted</h2>
+    <p id="successMessage" style="margin-top:10px;font-size:15px;"></p>
+    <button onclick="closeSuccessPopup()" style="margin-top:20px;width:100%;padding:12px;background:linear-gradient(90deg,#0ea5e9,#0284c7);border:none;border-radius:8px;color:white;cursor:pointer;">Close</button>
+  </div>
+</div>
+
+<!-- CONTACT FORM MODAL -->
+<div id="contactModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;justify-content:center;align-items:center;">
+  <div style="background:white;max-width:400px;width:90%;padding:20px;border-radius:12px;">
+    <h2 style="text-align:center;color:#1d4ed8;">Contact Us</h2>
+    <input type="text" id="contactName" placeholder="Your Name" style="width:100%;padding:10px;margin-top:10px;border-radius:6px;border:1px solid #ccc;">
+    <div class="error-text" id="contactNameError">Please enter your name</div>
+    <input type="email" id="contactEmail" placeholder="Your Email" style="width:100%;padding:10px;margin-top:10px;border-radius:6px;border:1px solid #ccc;">
+    <div class="error-text" id="contactEmailError">Please enter your email</div>
+    <textarea id="contactMessage" placeholder="Your Message" style="width:100%;padding:10px;margin-top:10px;border-radius:6px;border:1px solid #ccc;min-height:100px;"></textarea>
+    <div class="error-text" id="contactMessageError">Please write your message</div>
+    <button onclick="sendToWhatsApp()" style="margin-top:15px;width:100%;padding:12px;border:none;border-radius:8px;background:#25D366;color:white;font-size:16px;cursor:pointer;">Send via WhatsApp</button>
+    <button onclick="closeContactForm()" style="margin-top:10px;width:100%;padding:10px;border:none;border-radius:8px;background:#64748b;color:white;cursor:pointer;">Cancel</button>
+  </div>
+</div>
+
+<!-- WELCOME MODAL -->
+<div id="welcomeModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;justify-content:center;align-items:center;">
+  <div style="background:white;max-width:500px;width:90%;padding:25px;border-radius:12px;text-align:left;box-shadow:0 10px 30px rgba(0,0,0,0.2);">
+    <h2 style="color:#1d4ed8;text-align:center;">Welcome to Studysprint</h2>
+    <p style="margin-top:15px;">We are pleased to have you on board. Studysprint is designed to provide you with reliable access to academic resources, including notes, past examination papers, and essential study materials.</p>
+    <p style="margin-top:10px;">Our goal is to support your academic journey by making learning resources easily accessible, organized, and efficient to use.</p>
+    <p style="margin-top:10px;">Kindly explore the platform and make the most of the tools available to enhance your studies.</p>
+    <p style="font-weight:bold;margin-top:10px;">Wishing you success in your academic pursuits.</p>
+    <a href="https://whatsapp.com/channel/0029Vb72IPTDzgTIPIFRyr37" target="_blank"
+       style="display:block;margin-top:15px;text-align:center;padding:12px;border-radius:8px;background:#25D366;color:white;font-size:16px;text-decoration:none;font-weight:bold;">
+      📢 Join Our WhatsApp Channel
+    </a>
+    <button onclick="closeWelcome()" style="margin-top:20px;width:100%;padding:12px;border:none;border-radius:8px;background:linear-gradient(90deg,#0ea5e9,#0284c7);color:white;font-size:16px;cursor:pointer;">Continue</button>
+  </div>
+</div>
+
+<!-- FOLLOW CHANNEL MODAL -->
+<div id="followChannelModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:10002;justify-content:center;align-items:center;padding:10px;">
+  <div style="background:white;max-width:380px;width:100%;padding:28px 22px;border-radius:16px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.3);">
+    <div style="font-size:48px;margin-bottom:8px;">📢</div>
+    <h2 style="color:#1d4ed8;margin-bottom:8px;font-size:20px;">Follow Our Whatsapp  Channel</h2>
+    <p style="color:#555;font-size:14px;margin-bottom:18px;line-height:1.6;">You've succesfully downloaded <strong>2 revision materials</strong>!<br>Follow our WhatsApp channel to receive daily updates.</p>
+    <a id="followChannelLink" href="https://whatsapp.com/channel/0029Vb72IPTDzgTIPIFRyr37" target="_blank"
+       onclick="markChannelFollowed()"
+       style="display:block;padding:13px;border-radius:10px;background:linear-gradient(135deg,#25D366,#128C7E);color:white;font-size:16px;text-decoration:none;font-weight:bold;margin-bottom:12px;">
+      ✅ Follow on WhatsApp
+    </a>
+    <p style="font-size:12px;color:#94a3b8;">Click the button above to follow, then continue downloading.</p>
+  </div>
+</div>
+
+<!-- UNLOCK CODE MODAL -->
+<div id="unlockModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;justify-content:center;align-items:center;padding:10px;">
+  <div style="background:white;padding:22px;border-radius:14px;max-width:420px;width:100%;box-shadow:0 15px 40px rgba(0,0,0,0.25);">
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:15px;">
+      <div style="font-size:36px;">🔐</div>
+      <h2 style="color:#1d4ed8;margin-top:5px;">Unlock Downloads</h2>
+      <p style="font-size:13px;color:#555;margin-top:5px;">You've used your 3 free downloads. Purchase a plan to continue.</p>
+    </div>
+    <!-- Pricing Plans -->
+    <div style="background:#f0f7ff;border-radius:10px;padding:12px;margin-bottom:15px;">
+      <p style="font-weight:bold;color:#1d4ed8;margin-bottom:10px;font-size:14px;">📦 Available Plans:</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="background:white;border:2px solid #e0e7ff;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:20px;">🗓️</div>
+          <div style="font-weight:bold;color:#1d4ed8;font-size:13px;">Access unlimited revison materials for 2 Months</div>
+          <div style="color:#16a34a;font-weight:bold;font-size:16px;">KSh 50</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #93c5fd;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:20px;">🏆</div>
+          <div style="font-weight:bold;color:#1d4ed8;font-size:13px;">Access unlimited revison materials for 4 Months</div>
+          <div style="color:#16a34a;font-weight:bold;font-size:16px;">KSh 80</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Code Input -->
+    <input type="text" id="unlockCodeInput" placeholder="Enter your access code to unlock"
+           style="width:100%;padding:12px;margin-bottom:8px;border:2px solid #ddd;border-radius:8px;font-size:15px;letter-spacing:1px;text-transform:uppercase;">
+    <p id="unlockError" style="color:red;display:none;font-size:13px;margin-bottom:8px;">❌ Invalid or expired code. Please check and try again.</p>
+
+    <button onclick="submitUnlockCode()" style="width:100%;padding:12px;background:linear-gradient(90deg,#16a34a,#15803d);color:white;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;">
+      ✅ UNLOCK DOWNLOADS
+    </button>
+
+    <div style="margin-top:12px;padding:10px;background:#fffbeb;border-radius:8px;border-left:4px solid #f59e0b;font-size:13px;color:#555;">
+      💡 Pay via M-Pesa and receive your unique access code instantly.
+    </div>
+
+    <button onclick="openPaymentModal()"
+            style="width:100%;padding:10px;margin-top:10px;background:linear-gradient(90deg,#0ea5e9,#0284c7);color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;">
+    GET ACTIVATION CODE
+    </button>
+    <button onclick="closeUnlockModal()" style="width:100%;padding:10px;margin-top:8px;background:#64748b;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;">
+      Cancel
+    </button>
+  </div>
+</div>
+
+<!-- M-PESA PAYMENT MODAL -->
+<div id="paymentModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:10002;justify-content:center;align-items:flex-start;padding:10px;overflow-y:auto;">
+  <div style="background:white;border-radius:16px;max-width:430px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.35);overflow:hidden;margin:auto;margin-top:20px;margin-bottom:20px;">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#1d4ed8,#0ea5e9);padding:18px;text-align:center;">
+      <div style="font-size:32px;">📲</div>
+      <h2 style="color:white;margin-top:6px;font-size:20px;letter-spacing:0.5px;">CHOOSE YOUR SUBSCRIPTION</h2>
+    </div>
+    <div style="padding:18px;">
+      <!-- Plans -->
+      <p style="font-weight:700;color:#1d4ed8;font-size:14px;margin-bottom:10px;">📦 Available Plans:</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="background:#f0f7ff;border:2px solid #bfdbfe;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:26px;">🗓️</div>
+          <div style="font-weight:700;color:#1d4ed8;font-size:14px;margin-top:4px;">2 Months</div>
+          <div style="color:#16a34a;font-weight:900;font-size:20px;">KSh 50</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:2px solid #93c5fd;border-radius:10px;padding:14px;text-align:center;">
+          <div style="font-size:26px;">🏆</div>
+          <div style="font-weight:700;color:#1d4ed8;font-size:14px;margin-top:4px;">4 Months</div>
+          <div style="color:#16a34a;font-weight:900;font-size:20px;">KSh 80</div>
+        </div>
+      </div>
+      <!-- M-Pesa Instructions -->
+      <div style="background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:14px;margin-bottom:16px;">
+        <p style="font-weight:800;color:#15803d;font-size:15px;margin-bottom:8px;text-align:center;">💚 PAY VIA M-PESA</p>
+        <p style="color:#555;font-size:13px;text-align:center;margin-bottom:10px;font-weight:600;">BUY GOODS AND SERVICES</p>
+        <div style="background:white;border-radius:8px;padding:12px;text-align:center;border:1px dashed #16a34a;">
+          <p style="font-size:13px;color:#555;margin-bottom:4px;">TILL NUMBER</p>
+          <p style="font-size:28px;font-weight:900;color:#1d4ed8;letter-spacing:2px;">7964248</p>
+          <p style="font-size:12px;color:#888;margin-top:4px;">NAME: <strong style="color:#1e293b;">JOSEPH WAMBUA</strong></p>
+        </div>
+      </div>
+      <!-- Paste M-Pesa Message -->
+      <p style="font-size:13px;color:#444;margin-bottom:8px;font-weight:600;">📋 Already paid? Paste your full M-Pesa confirmation message below:</p>
+      <textarea id="mpesaMessage" rows="5" placeholder="Paste full M-Pesa SMS here e.g. QAB1234XYZ Confirmed. Ksh50.00 paid to..."
+        style="width:100%;padding:10px;border-radius:8px;border:2px solid #ddd;font-size:12px;resize:vertical;font-family:monospace;line-height:1.6;"></textarea>
+      <p id="mpesaError" style="color:#dc2626;font-size:13px;display:none;margin-top:6px;font-weight:600;"></p>
+      <!-- Reward Code Display -->
+      <div id="rewardBox" style="display:none;margin-top:12px;background:#f0fdf4;border:2px solid #86efac;border-radius:10px;padding:14px;text-align:center;">
+        <p style="font-size:13px;color:#15803d;font-weight:700;margin-bottom:6px;">🎁 Your One-Time Access Code:</p>
+        <p id="rewardCode" style="font-size:24px;font-weight:900;color:#1d4ed8;letter-spacing:3px;margin-bottom:4px;word-break:break-all;"></p>
+        <p id="rewardPlan" style="font-size:12px;color:#555;margin-bottom:6px;"></p>
+        <div id="codeExpiry" style="background:#fef9c3;border:1px solid #fde047;border-radius:6px;padding:6px 10px;margin-bottom:10px;font-size:12px;color:#854d0e;font-weight:700;">
+          ⏱️ Code expires in: <span id="expiryCountdown">60</span>s — Enter it now!
+        </div>
+        <button onclick="copyRewardCode()" id="copyCodeBtn"
+          style="padding:10px 24px;background:linear-gradient(90deg,#16a34a,#15803d);color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:700;">
+          📋 Copy Code
+        </button>
+        <p id="copyConfirm" style="color:#16a34a;font-size:12px;margin-top:6px;display:none;">✅ Copied to clipboard!</p>
+      </div>
+      <!-- Action Buttons -->
+      <button onclick="verifyMpesaMessage()"
+        style="width:100%;padding:13px;margin-top:14px;background:linear-gradient(90deg,#16a34a,#15803d);color:white;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;">
+        ✅ Verify Payment &amp; Get Code
+      </button>
+      <button onclick="closePaymentModal()"
+        style="width:100%;padding:11px;margin-top:8px;background:#64748b;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;">
+        Back
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ACTIVATION SUCCESS MODAL -->
+<div id="activationModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:10001;justify-content:center;align-items:center;padding:10px;">
+  <div style="background:white;padding:25px;border-radius:16px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,0.3);">
+    <div style="font-size:50px;margin-bottom:10px;">🎉</div>
+    <h2 style="color:#16a34a;margin-bottom:5px;">Access Activated!</h2>
+    <div id="activationBadge" style="background:linear-gradient(135deg,#1d4ed8,#0ea5e9);color:white;border-radius:12px;padding:15px;margin:15px 0;">
+      <div id="activationPlan" style="font-size:20px;font-weight:bold;"></div>
+      <div id="activationAmount" style="font-size:14px;opacity:0.9;margin-top:4px;"></div>
+    </div>
+    <div style="background:#f0fdf4;border-radius:10px;padding:12px;margin-bottom:15px;text-align:left;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="color:#555;font-size:13px;">⏱️ Duration:</span>
+        <span id="activationDuration" style="font-weight:bold;color:#1d4ed8;font-size:13px;"></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="color:#555;font-size:13px;">📅 Activated:</span>
+        <span id="activationStart" style="font-weight:bold;color:#1d4ed8;font-size:13px;"></span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="color:#555;font-size:13px;">⏳ Expires:</span>
+        <span id="activationExpiry" style="font-weight:bold;color:#dc2626;font-size:13px;"></span>
+      </div>
+    </div>
+    <p style="font-size:13px;color:#555;margin-bottom:15px;">You now have <strong>unlimited downloads</strong> until your plan expires. Happy studying! 📚</p>
+    <button onclick="closeActivationModal()" style="width:100%;padding:13px;background:linear-gradient(90deg,#0ea5e9,#0284c7);border:none;border-radius:8px;color:white;font-size:16px;font-weight:bold;cursor:pointer;">
+      Start Downloading 🚀
+    </button>
+  </div>
+</div>
+
+<!-- FORGOT PASSWORD MODAL -->
+<div id="forgotModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;justify-content:center;align-items:center;">
+  <div style="background:white;padding:25px;border-radius:12px;max-width:400px;width:90%;text-align:center;">
+    <div style="font-size:40px;margin-bottom:8px;">🔑</div>
+    <h3 style="color:#1d4ed8;margin-bottom:8px;">Reset Password</h3>
+    <p style="margin-bottom:15px;font-size:14px;color:#555;">Enter your registered email address and we'll send you a password reset link.</p>
+    <input type="email" id="forgotIdentifier" placeholder="e.g. studysprintke@gmail.com" style="width:100%;padding:12px;border-radius:8px;border:1px solid #ddd;margin-bottom:10px;box-sizing:border-box;">
+    <p id="forgotError" style="color:red;font-size:13px;display:none;margin-bottom:10px;"></p>
+    <p id="forgotSuccess" style="color:#16a34a;font-size:13px;display:none;margin-bottom:10px;"></p>
+    <button id="forgotSubmitBtn" onclick="submitForgotPassword()" style="width:100%;padding:12px;background:linear-gradient(90deg,#0ea5e9,#0284c7);border:none;border-radius:8px;color:white;font-size:16px;cursor:pointer;">Send Reset Link</button>
+    <button onclick="closeForgotModal()" style="width:100%;padding:10px;margin-top:10px;background:#64748b;border:none;border-radius:8px;color:white;cursor:pointer;">Cancel</button>
+  </div>
+</div>
+
+<!-- ===== UNIVERSITY DOCUMENT DATA FILES ===== -->
+<script src="egerton.js"></script>
+<script src="kenyatta.js"></script>
+<script src="maseno.js"></script>
+<script src="karatina.js"></script>
+<script src="chuka.js"></script>
+<script src="jkuat.js"></script>
+<script src="moi.js"></script>
+<script src="kisii.js"></script>
+<script>
+// ===================== CONSTANTS =====================
+const MAX_FREE_DOWNLOADS = 4;
+const FOLLOW_PROMPT_AFTER = 3; // Show follow channel prompt after this many downloads
+// ===================== INIT =====================
+document.addEventListener("DOMContentLoaded", () => {
+  renderAllUniDocs();
+  setTimeout(() => {
+    document.getElementById("splashScreen").style.display = "none";
+    // Fast-restore: if localStorage already has a valid session from a previous login,
+    // show the main page immediately without waiting for Firebase round-trip
+    let uid = localStorage.getItem("currentUser");
+    if (uid) {
+      let users = JSON.parse(localStorage.getItem("users")) || {};
+      if (users[uid]) {
+        loadUserData(users[uid], uid);
+        showMainPage();
+        updateLogoutState();
+        // Firebase onAuthStateChanged will confirm/invalidate silently in background
+      }
+    }
+    // If no uid, just show auth forms (default state) — Firebase module handles any active session
+  }, 2500);
+});
+// ===================== TOGGLE PASSWORD =====================
+function togglePass(inputId, eyeEl) {
+  let inp = document.getElementById(inputId);
+  inp.type = inp.type === "password" ? "text" : "password";
+  eyeEl.textContent = inp.type === "password" ? "👁️" : "🔒";
+}
+
+// ===================== TOGGLE VIDEO SOUND =====================
+function toggleMute(video) {
+  video.muted = !video.muted;
+}
+
+// ===================== FORM SWITCHING =====================
+function showSignup() {
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('registerForm').style.display = 'none';
+  document.getElementById('signupForm').style.display = 'block';
+}
+function showLogin() {
+  document.getElementById('signupForm').style.display = 'none';
+  document.getElementById('registerForm').style.display = 'none';
+  document.getElementById('loginForm').style.display = 'block';
+}
+function openRegisterForm() {
+  document.getElementById('signupForm').style.display = 'none';
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('registerForm').style.display = 'block';
+}
+
+// ===================== LOGIN =====================
+function handleLogin() {
+  let identifier = document.getElementById('loginIdentifier');
+  let pass = document.getElementById('loginPassword');
+  let identErr = document.getElementById('loginIdentifierError');
+  let passErr = document.getElementById('loginPasswordError');
+
+  identErr.style.display = 'none';
+  passErr.style.display = 'none';
+  identifier.classList.remove('input-error');
+  pass.classList.remove('input-error');
+
+  let valid = true;
+  if (!identifier.value.trim()) {
+    identErr.textContent = 'Please fill this field';
+    identErr.style.display = 'block';
+    identifier.classList.add('input-error');
+    valid = false;
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.value.trim())) {
+    identErr.textContent = 'Please enter a valid email address';
+    identErr.style.display = 'block';
+    identifier.classList.add('input-error');
+    valid = false;
+  }
+  if (!pass.value) {
+    passErr.style.display = 'block';
+    pass.classList.add('input-error');
+    valid = false;
+  }
+  if (!valid) return;
+
+  let email = identifier.value.trim().toLowerCase();
+  let password = pass.value;
+
+  // Show loading state
+  let loginBtn = document.querySelector('#loginForm .login-btn');
+  loginBtn.textContent = 'Logging in...';
+  loginBtn.disabled = true;
+
+  window._fbSignIn(window._fbAuth, email, password)
+    .then((userCredential) => {
+      let uid = userCredential.user.uid;
+      let users = JSON.parse(localStorage.getItem('users')) || {};
+      if (!users[uid]) {
+        // Fallback: create local entry if missing
+        users[uid] = { name: "Student", email: email, phone: "", password: "", profilePic: "" };
+        localStorage.setItem('users', JSON.stringify(users));
+      }
+      localStorage.setItem('currentUser', uid);
+      logLogin(uid);
+      loadUserData(users[uid], uid);
+      showMainPage();
+      updateLogoutState();
+    })
+    .catch((error) => {
+      let msg = 'Login failed. Check your email and password.';
+      if (error.code === 'auth/user-not-found') msg = 'No account found with this email.';
+      else if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') msg = 'Wrong password. Please try again.';
+      else if (error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try again later.';
+      identErr.textContent = msg;
+      identErr.style.display = 'block';
+      identifier.classList.add('input-error');
+    })
+    .finally(() => {
+      loginBtn.textContent = 'Login';
+      loginBtn.disabled = false;
+    });
+}
+function handleRegister() {
+  let name = document.getElementById('regName');
+  let emailEl = document.getElementById('regEmailPrefix');
+  let phone = document.getElementById('regPhone');
+  let password = document.getElementById('regPassword');
+  let confirmPassword = document.getElementById('regConfirmPassword');
+  // Clear errors
+  ['regNameError','regEmailError','regPhoneError','regPasswordError','regConfirmPasswordError'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  [name, emailEl, phone, password, confirmPassword].forEach(el => el.classList.remove('input-error'));
+
+  let valid = true;
+  if (!name.value.trim()) {
+    document.getElementById('regNameError').style.display = 'block';
+    name.classList.add('input-error'); valid = false;
+  }
+  let emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailEl.value.trim() || !emailRegex.test(emailEl.value.trim())) {
+    document.getElementById('regEmailError').textContent = 'Please enter a valid email address';
+    document.getElementById('regEmailError').style.display = 'block';
+    emailEl.classList.add('input-error'); valid = false;
+  }
+  if (!phone.value.trim()) {
+    document.getElementById('regPhoneError').style.display = 'block';
+    phone.classList.add('input-error'); valid = false;
+  }
+  if (!password.value) {
+    document.getElementById('regPasswordError').style.display = 'block';
+    password.classList.add('input-error'); valid = false;
+  }
+  if (confirmPassword.value !== password.value) {
+    document.getElementById('regConfirmPasswordError').style.display = 'block';
+    confirmPassword.classList.add('input-error'); valid = false;
+  }
+  if (!valid) return;
+
+  let fullEmail = emailEl.value.trim().toLowerCase();
+
+  // Show loading
+  let regBtn = document.querySelector('#registerForm .login-btn');
+  regBtn.textContent = 'Creating account...';
+  regBtn.disabled = true;
+
+  window._fbCreateUser(window._fbAuth, fullEmail, password.value)
+    .then((userCredential) => {
+      let uid = userCredential.user.uid;
+      let users = JSON.parse(localStorage.getItem('users')) || {};
+      users[uid] = {
+        name: name.value.trim(),
+        email: fullEmail,
+        phone: phone.value.trim(),
+        password: password.value,
+        profilePic: ""
+      };
+      localStorage.setItem('users', JSON.stringify(users));
+      localStorage.setItem('currentUser', uid);
+      logLogin(uid);
+      logActivity(uid, "🎉", "Account created", "Welcome to StudySprint!");
+      alert('✅ Registration successful! Welcome to Studysprint.');
+      loadUserData(users[uid], uid);
+      showMainPage();
+      updateLogoutState();
+      setTimeout(showWelcome, 500);
+    })
+    .catch((error) => {
+      let msg = 'Registration failed. Please try again.';
+      if (error.code === 'auth/email-already-in-use') msg = 'This email is already registered.';
+      else if (error.code === 'auth/weak-password') msg = 'Password must be at least 6 characters.';
+      else if (error.code === 'auth/invalid-email') msg = 'Invalid email address.';
+      document.getElementById('regEmailError').textContent = msg;
+      document.getElementById('regEmailError').style.display = 'block';
+      emailEl.classList.add('input-error');
+    })
+    .finally(() => {
+      regBtn.textContent = 'Register';
+      regBtn.disabled = false;
+    });
+}
+
+// ===================== LOAD USER DATA =====================
+function loadUserData(user, id) {
+  if (user.profilePic) {
+    document.getElementById("profilePic").src = user.profilePic;
+  }
+  document.getElementById("profileReg").value = user.email || id;
+  document.getElementById("profileName").value = user.name || "";
+  document.getElementById("profileUni").value = user.university || "";
+  document.getElementById("profileYear").value = user.year || "";
+  document.getElementById("profileEmail").value = user.email || "";
+  document.getElementById("profilePhone").value = user.phone || "";
+}
+// ===================== SHOW MAIN PAGE =====================
+function showMainPage() {
+  document.getElementById("loginPage").style.display = "none";
+  document.getElementById("mainHeader").style.display = "block";
+  document.getElementById("mainTopBar").style.display = "flex";
+  document.getElementById("categoryBar").style.display = "none";
+  document.getElementById("mainContainer").style.display = "block";
+  document.getElementById("uniHome").style.display = "block";
+  document.querySelectorAll(".uni-hub").forEach(h => h.style.display = "none");
+  document.getElementById("unlockSection").style.display = "block";
+  document.getElementById("socialBar").style.display = "flex";
+  document.getElementById("mainFooter").style.display = "block";
+  document.getElementById("contactBtnWrapper").style.display = "block";
+  document.getElementById("search").placeholder = "Search universities...";
+  activeHubId = null;
+}
+
+// ===================== LOGOUT =====================
+function isDownloadLocked() {
+  let currentUser = localStorage.getItem("currentUser");
+  if (!currentUser) return false;
+  if (isLicenseActive(currentUser)) return false;
+  let counts = JSON.parse(localStorage.getItem("downloadCounts")) || {};
+  return (counts[currentUser] || 0) >= MAX_FREE_DOWNLOADS;
+}
+
+function updateLogoutState() {
+  let btn = document.getElementById("logoutBtn");
+  if (!btn) return;
+  if (isDownloadLocked()) {
+    btn.disabled = true;
+    btn.title = "You've used your 3 free downloads. Unlock access to logout.";
+    btn.style.background = "#94a3b8";
+    btn.style.cursor = "not-allowed";
+    btn.style.opacity = "0.6";
+    btn.textContent = "🔒 Logout";
+    btn.onclick = function(e) {
+      e.preventDefault();
+      showUnlockModal();
+    };
+  } else {
+    btn.disabled = false;
+    btn.title = "Logout";
+    btn.style.background = "";
+    btn.style.cursor = "pointer";
+    btn.style.opacity = "1";
+    btn.textContent = "Logout";
+    btn.onclick = function() { logout(); };
+  }
+}
+
+function logout() {
+  if (isDownloadLocked()) {
+    showUnlockModal();
+    return;
+  }
+  localStorage.removeItem("currentUser");
+  if (window._fbSignOut && window._fbAuth) {
+    window._fbSignOut(window._fbAuth).catch(() => {});
+  }
+  location.reload();
+}
+
+// ===================== PROFILE =====================
+function openProfile() {
+  document.getElementById("mainContainer").style.display = "none";
+  document.querySelectorAll(".uni-hub").forEach(h => h.style.display = "none");
+  document.getElementById("profileSection").style.display = "block";
+  document.getElementById("categoryBar").style.display = "none";
+  switchProfileTab("info");
+  renderProfileData();
+} 
+
+function goBack() {
+  document.getElementById("profileSection").style.display = "none";
+  document.getElementById("mainContainer").style.display = "block";
+  if (activeHubId) {
+    document.getElementById("uniHome").style.display = "none";
+    document.getElementById("hub-" + activeHubId).style.display = "block";
+    document.getElementById("categoryBar").style.display = "flex";
+  } else {
+    document.getElementById("uniHome").style.display = "block";
+    document.getElementById("categoryBar").style.display = "none";
+  }
+}
+
+function switchProfileTab(tab) {
+  ["info","security","activity"].forEach(t => {
+    let panel = document.getElementById("tab" + t.charAt(0).toUpperCase() + t.slice(1));
+    let btn = document.getElementById("tab" + t.charAt(0).toUpperCase() + t.slice(1) + "Btn");
+    if (panel) panel.style.display = (t === tab) ? "block" : "none";
+    if (btn) {
+      btn.style.background = (t === tab) ? "linear-gradient(135deg,#1d4ed8,#0ea5e9)" : "transparent";
+      btn.style.color = (t === tab) ? "white" : "#64748b";
+    }
+  });
+  if (tab === "activity") renderActivityTab();
+  if (tab === "security") renderLoginActivity();
+}
+
+function renderProfileData() {
+  let currentUser = localStorage.getItem("currentUser");
+  if (!currentUser) return;
+  let users = JSON.parse(localStorage.getItem("users")) || {};
+  let user = users[currentUser] || {};
+  let lic = getUserLicense(currentUser);
+
+  document.getElementById("profileDisplayName").textContent = user.name || "Student";
+  document.getElementById("profileDisplayEmail").textContent = user.email || "";
+  document.getElementById("profileName").value = user.name || "";
+  document.getElementById("profileEmail").value = user.email || "";
+  document.getElementById("profilePhone").value = user.phone || "";
+  document.getElementById("profileUni").value = user.university || "";
+  document.getElementById("profileYear").value = user.year || "";
+  document.getElementById("profileReg").value = user.email || currentUser;
+  if (user.profilePic) document.getElementById("profilePic").src = user.profilePic;
+
+  // Badge
+  let badgeEl = document.getElementById("subBadge");
+  let badgeText = document.getElementById("subBadgeText");
+  let active = lic && Date.now() < lic.expiresAt;
+  badgeEl.style.background = active ? "#eff6ff" : "#f0fdf4";
+  badgeEl.style.borderColor = active ? "#93c5fd" : "#86efac";
+  badgeEl.style.color = active ? "#1d4ed8" : "#15803d";
+  badgeEl.querySelector("span").textContent = active ? "🏆" : "🔓";
+  badgeText.textContent = active ? lic.plan + " — Active" : "Free Plan";
+
+  // Sub info card
+  let subCard = document.getElementById("subInfoCard");
+  if (active) {
+    let daysLeft = Math.ceil((lic.expiresAt - Date.now()) / 86400000);
+    let pct = Math.max(0, Math.min(100, Math.round((daysLeft / lic.days) * 100)));
+    subCard.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div>
+          <p style="font-weight:700;color:#1d4ed8;font-size:15px;margin:0;">${lic.plan}</p>
+          <p style="color:#64748b;font-size:12px;margin:3px 0 0;">KSh ${lic.amount} • Activated ${formatDate(lic.activatedAt)}</p>
+        </div>
+        <div style="background:#dbeafe;color:#1d4ed8;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;">${daysLeft}d left</div>
+      </div>
+      <div style="background:#f1f5f9;border-radius:8px;height:8px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#1d4ed8,#0ea5e9);border-radius:8px;"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:5px;">
+        <span style="font-size:11px;color:#94a3b8;">Expires ${formatDate(lic.expiresAt)}</span>
+        <span style="font-size:11px;color:#94a3b8;">${pct}% remaining</span>
+      </div>`;
+  } else {
+    subCard.innerHTML = `
+      <div style="text-align:center;padding:14px 0;">
+        <div style="font-size:36px;margin-bottom:8px;">📚</div>
+        <p style="color:#64748b;font-size:14px;margin-bottom:14px;">You are on the <strong>Free Plan</strong> (3 downloads).</p>
+        <button onclick="showUnlockModal()" style="padding:11px 24px;background:linear-gradient(135deg,#1d4ed8,#0ea5e9);color:white;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">🚀 Upgrade Now</button>
+      </div>`;
+  }
+}
+
+function renderActivityTab() {
+  let currentUser = localStorage.getItem("currentUser");
+  if (!currentUser) return;
+
+  let dlCounts = JSON.parse(localStorage.getItem("downloadCounts")) || {};
+  let loginLogs = JSON.parse(localStorage.getItem("s_login_logs")) || {};
+  let licenses = JSON.parse(localStorage.getItem("s_licenses")) || {};
+
+  document.getElementById("statDownloads").textContent = dlCounts[currentUser] || 0;
+  document.getElementById("statLogins").textContent = (loginLogs[currentUser] || []).length;
+
+  // Payment history: derive from user's license record
+  let userLic = licenses[currentUser];
+  let myPayList = userLic ? [[userLic.code, userLic]] : [];
+  document.getElementById("statPayments").textContent = myPayList.length;
+
+  // Payment history
+  let payEl = document.getElementById("paymentHistoryList");
+  if (myPayList.length === 0) {
+    payEl.innerHTML = `<p style="color:#94a3b8;font-size:13px;text-align:center;padding:10px 0;">No payments recorded yet.</p>`;
+  } else {
+    payEl.innerHTML = myPayList.map(([code, info]) => {
+      let label = info.plan || code;
+      let amount = info.amount || "—";
+      return `<div style="display:flex;align-items:center;gap:12px;padding:11px;background:#f8fafc;border-radius:10px;border-left:3px solid #16a34a;">
+        <div style="font-size:24px;">💳</div>
+        <div style="flex:1;">
+          <p style="font-weight:700;color:#1e293b;font-size:13px;margin:0;">${label}</p>
+          <p style="color:#64748b;font-size:11px;margin:2px 0 0;">Code: <code style="background:#e2e8f0;padding:1px 5px;border-radius:4px;">${code}</code></p>
+          <p style="color:#94a3b8;font-size:11px;margin:2px 0 0;">${formatDate(info.activatedAt || info.usedAt || Date.now())}</p>
+        </div>
+        <div style="font-weight:800;color:#16a34a;font-size:14px;">KSh ${amount}</div>
+      </div>`;
+    }).join("");
+  }
+
+  // Recent activity
+  let actEl = document.getElementById("recentActivityList");
+  let activities = JSON.parse(localStorage.getItem("s_activity_" + currentUser)) || [];
+  if (activities.length === 0) {
+    actEl.innerHTML = `<p style="color:#94a3b8;font-size:13px;text-align:center;padding:10px 0;">No activity recorded yet.</p>`;
+  } else {
+    actEl.innerHTML = activities.slice().reverse().slice(0, 20).map(a => `
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:11px;background:#f8fafc;border-radius:10px;">
+        <div style="font-size:20px;margin-top:1px;">${a.icon}</div>
+        <div style="flex:1;">
+          <p style="font-weight:600;color:#1e293b;font-size:13px;margin:0;">${a.title}</p>
+          <p style="color:#64748b;font-size:11px;margin:2px 0 0;">${a.detail || ""}</p>
+          <p style="color:#94a3b8;font-size:11px;margin:2px 0 0;">${formatDate(a.ts)}</p>
+        </div>
+      </div>`).join("");
+  }
+}
+
+function renderLoginActivity() {
+  let currentUser = localStorage.getItem("currentUser");
+  let loginLogs = JSON.parse(localStorage.getItem("s_login_logs")) || {};
+  let logs = (loginLogs[currentUser] || []).slice().reverse().slice(0, 10);
+  let el = document.getElementById("loginActivityList");
+  if (logs.length === 0) {
+    el.innerHTML = `<p style="color:#94a3b8;font-size:13px;text-align:center;padding:10px 0;">No login history yet.</p>`;
+    return;
+  }
+  el.innerHTML = logs.map((l, i) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:11px;background:${i===0?'#f0fdf4':'#f8fafc'};border-radius:10px;border-left:3px solid ${i===0?'#16a34a':'#e2e8f0'};">
+      <div style="font-size:22px;">${i===0?'🟢':'🔵'}</div>
+      <div style="flex:1;">
+        <p style="font-weight:700;color:#1e293b;font-size:13px;margin:0;">${i===0?'Current Session':'Previous Login'}</p>
+        <p style="color:#64748b;font-size:11px;margin:2px 0 0;">📱 ${l.device}</p>
+        <p style="color:#64748b;font-size:11px;margin:1px 0 0;">🌐 ${l.browser}</p>
+        <p style="color:#94a3b8;font-size:11px;margin:2px 0 0;">${formatDate(l.ts)}</p>
+      </div>
+      <div style="background:${i===0?'#dcfce7':'#e2e8f0'};color:${i===0?'#15803d':'#64748b'};border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;">${i===0?'Active':'✓ OK'}</div>
+    </div>`).join("");
+}
+
+function logActivity(userKey, icon, title, detail) {
+  let key = "s_activity_" + userKey;
+  let acts = JSON.parse(localStorage.getItem(key)) || [];
+  acts.push({ icon, title, detail, ts: Date.now() });
+  if (acts.length > 50) acts = acts.slice(-50);
+  localStorage.setItem(key, JSON.stringify(acts));
+}
+
+function logLogin(userKey) {
+  let ua = navigator.userAgent;
+  let device = /Mobi|Android/i.test(ua) ? "Mobile Device" : "Desktop / Laptop";
+  let browser = ua.includes("Chrome") && !ua.includes("Edg") ? "Chrome"
+              : ua.includes("Firefox") ? "Firefox"
+              : ua.includes("Safari") && !ua.includes("Chrome") ? "Safari"
+              : ua.includes("Edg") ? "Edge" : "Unknown Browser";
+  let logs = JSON.parse(localStorage.getItem("ss_login_logs")) || {};
+  logs[userKey] = logs[userKey] || [];
+  logs[userKey].push({ device, browser, ts: Date.now() });
+  if (logs[userKey].length > 20) logs[userKey] = logs[userKey].slice(-20);
+  localStorage.setItem("ss_login_logs", JSON.stringify(logs));
+  logActivity(userKey, "🔑", "Login successful", `${device} • ${browser}`);
+}
+
+function selectProfilePic() {
+  document.getElementById("fileInput").click();
+}
+
+function loadProfilePic(event) {
+  let file = event.target.files[0];
+  if (!file) return;
+  let reader = new FileReader();
+  reader.onload = e => { document.getElementById("profilePic").src = e.target.result; };
+  reader.readAsDataURL(file);
+}
+
+function saveProfile() {
+  let currentUser = localStorage.getItem("currentUser");
+  if (!currentUser) return;
+  let users = JSON.parse(localStorage.getItem("users")) || {};
+  let user = users[currentUser];
+
+  let currentPass = document.getElementById("currentPassword").value;
+  let newPass = document.getElementById("newPassword").value;
+  let confirmNewPass= document.getElementById("confirmNewPassword").value;
+
+  if (currentPass || newPass || confirmNewPass) {
+    if (currentPass !== user.password) { alert("Current password is incorrect"); return; }
+    if (newPass !== confirmNewPass) { alert("New passwords do not match"); return; }
+    if (newPass) {
+      user.password = newPass;
+      logActivity(currentUser, "🔐", "Password changed", "Security update");
+    }
+  }
+
+  user.name = document.getElementById("profileName").value;
+  user.university = document.getElementById("profileUni").value;
+  user.year = document.getElementById("profileYear").value;
+  user.phone = document.getElementById("profilePhone").value;
+
+  let picSrc = document.getElementById("profilePic").src;
+  if (picSrc && picSrc.startsWith("data:")) user.profilePic = picSrc;
+
+  users[currentUser] = user;
+  localStorage.setItem("users", JSON.stringify(users));
+
+  document.getElementById("currentPassword").value = "";
+  document.getElementById("newPassword").value = "";
+  document.getElementById("confirmNewPassword").value = "";
+
+  logActivity(currentUser, "✏️", "Profile updated", "Personal info saved");
+  renderProfileData();
+  alert(" Profile updated successfully!");
+}
+
+// ===================== UNIVERSITY DOCUMENT RENDERING =====================
+function renderAllUniDocs() {
+  const data = window.UNI_DOCS || {};
+  Object.keys(data).forEach(uniKey => renderUniDocs(uniKey));
+}
+
+function renderUniDocs(uniKey) {
+  const entry = (window.UNI_DOCS && window.UNI_DOCS[uniKey]) || null;
+  const comingSoon = document.getElementById("comingsoon-" + uniKey);
+  const docWrap = document.getElementById("docwrap-" + uniKey);
+  const list = document.getElementById("doclist-" + uniKey);
+  const videoWrap = document.getElementById("video-" + uniKey);
+
+  // No data (or empty docs) yet — keep the "coming soon" placeholder showing
+  if (!entry || !entry.docs || entry.docs.length === 0) {
+    if (comingSoon) comingSoon.style.display = "block";
+    if (docWrap) docWrap.style.display = "none";
+    return;
+  }
+
+  // Data available — hide "coming soon" placeholder and render the documents
+  if (comingSoon) comingSoon.style.display = "none";
+  if (docWrap) docWrap.style.display = "block";
+
+  if (videoWrap) {
+    videoWrap.innerHTML = entry.video
+      ? `<video autoplay muted loop playsinline style="width:100%;max-width:500px;cursor:pointer;border-radius:12px;" onclick="toggleMute(this)"><source src="${entry.video}" type="video/mp4"></video>`
+      : "";
+  }
+
+  if (list) {
+    list.innerHTML = entry.docs.map(doc => `
+      <li class="file-item" data-category="${doc.category}">
+        <img src="${doc.img}" class="doc-pic">
+        <span class="file-name">${doc.name}</span>
+        <button class="download-btn" onclick="downloadFile('${doc.link}',this)"><span class="btn-text"> Download</span></button>
+      </li>
+    `).join("");
+  }
+}
+
+// ===================== UNIVERSITY HUB NAVIGATION =====================
+let activeHubId = null;
+
+function showUniHub(uniKey) {
+  document.getElementById("uniHome").style.display = "none";
+  document.querySelectorAll(".uni-hub").forEach(h => h.style.display = "none");
+  let hub = document.getElementById("hub-" + uniKey);
+  if (hub) hub.style.display = "block";
+  activeHubId = uniKey;
+  document.getElementById("categoryBar").style.display = "flex";
+  document.getElementById("search").placeholder = "Search materials...";
+  // Default to past-papers tab
+  let pastBtn = document.querySelector(".category-bar button:nth-child(2)");
+  if (pastBtn) filterCategory("notes", pastBtn);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function backToHome() {
+  document.querySelectorAll(".uni-hub").forEach(h => h.style.display = "none");
+  document.getElementById("uniHome").style.display = "block";
+  activeHubId = null;
+  document.getElementById("categoryBar").style.display = "none";
+  document.getElementById("search").placeholder = "Search universities...";
+  document.getElementById("pagination").style.display = "none";
+  document.querySelectorAll(".file-item").forEach(f => { f.classList.remove("visible"); f.style.display = "none"; });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ===================== CATEGORY FILTER =====================
+function filterCategory(category, el) {
+  let buttons = document.querySelectorAll(".category-bar button");
+  buttons.forEach(btn => btn.classList.remove("active"));
+  if (el) el.classList.add("active");
+
+  // Scope to active hub only
+  let scope = activeHubId ? document.getElementById("hub-" + activeHubId) : document;
+  let files = scope ? scope.querySelectorAll(".file-item") : document.querySelectorAll(".file-item");
+
+  files.forEach(file => {
+    if (file.dataset.category === category) {
+      file.classList.add("visible");
+    } else {
+      file.classList.remove("visible");
+      file.style.display = "none";
+    }
+  });
+
+  showPage(1);
+}
+
+// ===================== SEARCH =====================
+function searchFiles() {
+  let input = document.getElementById("search").value.toLowerCase();
+  if (!activeHubId) return; // no search on home grid
+  let scope = document.getElementById("hub-" + activeHubId);
+  let files = scope ? scope.querySelectorAll(".file-item") : [];
+
+  files.forEach(file => {
+    let name = file.querySelector(".file-name") ? file.querySelector(".file-name").innerText.toLowerCase() : "";
+    if (input === "") {
+      // restore visibility based on category
+      let activeBtn = document.querySelector(".category-bar button.active");
+      if (activeBtn) {
+        let cat = activeBtn.getAttribute("onclick").match(/'([^']+)'/)[1];
+        if (file.dataset.category === cat) {
+          file.classList.add("visible");
+          file.style.display = "flex";
+        } else {
+          file.classList.remove("visible");
+          file.style.display = "none";
+        }
+      }
+    } else {
+      if (file.classList.contains("visible")) {
+        file.style.display = name.includes(input) ? "flex" : "none";
+      }
+    }
+  });
+}
+
+// ===================== PAGINATION =====================
+const pageSize = 18;
+let currentPage = 1;
+
+function showPage(page) {
+  let scope = activeHubId ? document.getElementById("hub-" + activeHubId) : document;
+  const items = scope ? scope.querySelectorAll(".file-item.visible") : document.querySelectorAll(".file-item.visible");
+  // Hide all file-items in scope first
+  (scope ? scope.querySelectorAll(".file-item") : document.querySelectorAll(".file-item"))
+    .forEach(i => i.style.display = "none");
+  items.forEach((item, index) => {
+    if (index >= (page - 1) * pageSize && index < page * pageSize) {
+      item.style.display = "flex";
+    }
+  });
+  currentPage = page;
+  let totalPages = Math.ceil(items.length / pageSize);
+  document.getElementById("pageInfo").textContent = `Page ${page} of ${totalPages || 1}`;
+  let pag = document.getElementById("pagination");
+  pag.style.display = items.length > pageSize ? "block" : "none";
+}
+function prevPage() {
+  if (currentPage > 1) { currentPage--; showPage(currentPage); }
+}
+function nextPage() {
+  let scope = activeHubId ? document.getElementById("hub-" + activeHubId) : document;
+  const items = scope ? scope.querySelectorAll(".file-item.visible") : document.querySelectorAll(".file-item.visible");
+  const totalPages = Math.ceil(items.length / pageSize);
+  if (currentPage < totalPages) { currentPage++; showPage(currentPage); }
+}
+
+// ===================== LICENSE PLAN DEFINITIONS =====================
+// Plans are defined here — codes are generated dynamically, NOT stored as a static list
+const PLAN_DEFS = {
+  "S60": { days: 60, amount: 50, label: "2 Months Access" },
+  "S120": { days: 120, amount: 80, label: "4 Months Access" }
+};
+
+// CODE EXPIRY: 60 seconds
+const CODE_TTL_MS = 60 * 1000;
+
+// Generate a cryptographically random code tied to this user + plan
+function generateAccessCode(planKey, userKey) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; 
+  let rand = "";
+  for (let i = 0; i < 4; i++) rand += chars[Math.floor(Math.random() * chars.length)];
+  const code = planKey + "-" + rand;
+  const issuedAt = Date.now();
+  const expiresAt = issuedAt + CODE_TTL_MS;
+
+  // Store in localStorage: keyed by code, with owner UID + expiry
+  let pending = JSON.parse(localStorage.getItem("s_pending_codes")) || {};
+  // Clean up any stale/expired codes first
+  for (let k in pending) {
+    if (Date.now() > pending[k].expiresAt) delete pending[k];
+  }
+  pending[code] = {
+    planKey,
+    userKey,
+    issuedAt,
+    expiresAt
+  };
+  localStorage.setItem("s_pending_codes", JSON.stringify(pending));
+  return code;
+}
+
+// ===================== LICENSE HELPERS =====================
+function getUserLicense(userKey) {
+  let licenses = JSON.parse(localStorage.getItem("s_licenses")) || {};
+  return licenses[userKey] || null;
+}
+function setUserLicense(userKey, licenseObj) {
+  let licenses = JSON.parse(localStorage.getItem("s_licenses")) || {};
+  licenses[userKey] = licenseObj;
+  localStorage.setItem("s_licenses", JSON.stringify(licenses));
+}
+function isLicenseActive(userKey) {
+  let lic = getUserLicense(userKey);
+  if (!lic) return false;
+  return Date.now() < lic.expiresAt;
+}
+function formatDate(ts) {
+  return new Date(ts).toLocaleDateString("en-KE", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  });
+}
+
+// ===================== DOWNLOAD SYSTEM =====================
+let downloadCounts = JSON.parse(localStorage.getItem("downloadCounts")) || {};
+
+function hasFollowedChannel() {
+  return localStorage.getItem("s_channel_followed") === "1";
+}
+function markChannelFollowed() {
+  localStorage.setItem("s_channel_followed", "1");
+  // Close modal after a short delay to let the WhatsApp link open
+  setTimeout(() => {
+    document.getElementById("followChannelModal").style.display = "none";
+  }, 800);
+}
+function showFollowChannelModal() {
+  document.getElementById("followChannelModal").style.display = "flex";
+}
+
+function downloadFile(link, btn) {
+  let currentUser = localStorage.getItem("currentUser");
+  if (!currentUser) { alert("Please login first"); return; }
+
+  // Check active license first
+  if (isLicenseActive(currentUser)) {
+    let text = btn.querySelector(".btn-text");
+    text.innerText = "Opening...";
+    setTimeout(() => {
+      window.open(link, "_blank");
+      text.innerText = "Downloaded ✓";
+      btn.classList.add("success");
+      let fname = btn.closest(".file-item")?.querySelector(".file-name")?.textContent || "File";
+      logActivity(currentUser, "⬇️", "Downloaded: " + fname, "Licensed download");
+      updateLogoutState();
+    }, 1000);
+    return;
+  }
+
+  // Fall back to free quota
+  downloadCounts[currentUser] = downloadCounts[currentUser] || 0;
+  if (downloadCounts[currentUser] >= MAX_FREE_DOWNLOADS) {
+    showUnlockModal();
+    return;
+  }
+  downloadCounts[currentUser]++;
+  localStorage.setItem("downloadCounts", JSON.stringify(downloadCounts));
+  let text = btn.querySelector(".btn-text");
+  text.innerText = "Opening...";
+  setTimeout(() => {
+    window.open(link, "_blank");
+    text.innerText = "Downloaded ✓";
+    btn.classList.add("success");
+    let fname = btn.closest(".file-item")?.querySelector(".file-name")?.textContent || "File";
+    logActivity(currentUser, "⬇️", "Downloaded: " + fname, "Free download (" + downloadCounts[currentUser] + "/" + MAX_FREE_DOWNLOADS + ")");
+    updateLogoutState();
+    // Show follow channel prompt after FOLLOW_PROMPT_AFTER downloads (only once, if not followed yet)
+    if (downloadCounts[currentUser] === FOLLOW_PROMPT_AFTER && !hasFollowedChannel()) {
+
+      setTimeout(showFollowChannelModal, 600);
+    }
+  }, 1000);
+}
+
+// ===================== UNLOCK MODAL =====================
+function showUnlockModal() {
+  document.getElementById("unlockModal").style.display = "flex";
+  document.getElementById("unlockError").style.display = "none";
+  document.getElementById("unlockCodeInput").value = "";
+}
+function closeUnlockModal() {
+  document.getElementById("unlockModal").style.display = "none";
+}
+function submitUnlockCode() {
+  let rawCode = document.getElementById("unlockCodeInput").value.trim().toUpperCase();
+  let errEl = document.getElementById("unlockError");
+  errEl.style.display = "none";
+
+  if (!rawCode) {
+    errEl.textContent = "❌ Please enter a code.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  let currentUser = localStorage.getItem("currentUser");
+  let pending = JSON.parse(localStorage.getItem("s_pending_codes")) || {};
+  let entry = pending[rawCode];
+
+  // 1. Code must exist (was issued by this system)
+  if (!entry) {
+    errEl.textContent = "❌ Invalid code. Only codes generated after M-Pesa verification are accepted.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  // 2. Code must not be expired
+  if (Date.now() > entry.expiresAt) {
+    // Clean it up
+    delete pending[rawCode];
+    localStorage.setItem("s_pending_codes", JSON.stringify(pending));
+    errEl.textContent = "❌ This code has expired (codes are valid for 1 minute only). Please verify your M-Pesa message again to get a new code or contact support for help.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  // 3. Code must belong to THIS user on THIS device
+  if (entry.userKey !== currentUser) {
+    errEl.textContent = "❌ This code was not issued to your account. Please verify your own M-Pesa message to get your code.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  // All checks passed — activate license
+  let planKey = entry.planKey;
+  let plan = PLAN_DEFS[planKey];
+  if (!plan) {
+    errEl.textContent = "❌ Invalid plan. Please contact support.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  // Remove code from pending (single use)
+  delete pending[rawCode];
+  localStorage.setItem("s_pending_codes", JSON.stringify(pending));
+
+  let now = Date.now();
+  let expiresAt = now + (plan.days * 24 * 60 * 60 * 1000);
+  
+  setUserLicense(currentUser, {
+    code: rawCode,
+    plan: plan.label,
+    days: plan.days,
+    amount: plan.amount,
+    activatedAt: now,
+    expiresAt: expiresAt
+  });
+
+  closeUnlockModal();
+  showActivationModal({ plan, now, expiresAt });
+  updateLogoutState();
+  logActivity(currentUser, "🏆", "Subscription activated", plan.label + " — KSh " + plan.amount);
+}
+
+// ===================== ACTIVATION SUCCESS MODAL =====================
+function showActivationModal({ plan, now, expiresAt }) {
+  document.getElementById("activationPlan").textContent = "🎓 " + plan.label;
+  document.getElementById("activationAmount").textContent = "Amount Paid: KSh " + plan.amount;
+  document.getElementById("activationDuration").textContent = plan.days + (plan.days === 1 ? " day" : " days");
+  document.getElementById("activationStart").textContent = formatDate(now);
+  document.getElementById("activationExpiry").textContent = formatDate(expiresAt);
+  document.getElementById("activationModal").style.display = "flex";
+}
+function closeActivationModal() {
+  document.getElementById("activationModal").style.display = "none";
+}
+
+// ===================== SUCCESS POPUP =====================
+function closeSuccessPopup() {
+  document.getElementById("successPopup").style.display = "none";
+}
+
+// ===================== CONTACT FORM =====================
+function openContactForm() {
+  document.getElementById("contactModal").style.display = "flex";
+  document.getElementById("contactName").value = "";
+  document.getElementById("contactEmail").value = "";
+  document.getElementById("contactMessage").value = "";
+  ['contactNameError','contactEmailError','contactMessageError'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+}
+function closeContactForm() {
+  document.getElementById("contactModal").style.display = "none";
+}
+function sendToWhatsApp() {
+  let name = document.getElementById("contactName").value.trim();
+  let email = document.getElementById("contactEmail").value.trim();
+  let message = document.getElementById("contactMessage").value.trim();
+  let valid = true;
+
+  if (!name) { document.getElementById("contactNameError").style.display = 'block'; valid = false; }
+  else document.getElementById("contactNameError").style.display = 'none';
+  if (!email) { document.getElementById("contactEmailError").style.display = 'block'; valid = false; }
+  else document.getElementById("contactEmailError").style.display = 'none';
+  if (!message) { document.getElementById("contactMessageError").style.display = 'block'; valid = false; }
+  else document.getElementById("contactMessageError").style.display = 'none';
+
+  if (!valid) return;
+
+  let text = `Name: ${name}\nEmail: ${email}\nMessage: ${message}`;
+  window.open(
+    `https://wa.me/254797277757?text=${encodeURIComponent(`*STUDYSPRINT SUPPORT*\n\nTo Admin,\n\n${text}\n\nRegards,\nStudySprint user `)}`,
+    "_blank"
+  );
+  closeContactForm();
+}
+
+// ===================== WELCOME MODAL =====================
+function showWelcome() {
+  document.getElementById("welcomeModal").style.display = "flex";
+}
+function closeWelcome() {
+  document.getElementById("welcomeModal").style.display = "none";
+}
+
+// ===================== M-PESA PAYMENT MODAL =====================
+
+// Regex patterns per amount — 2 plans only
+const MPESA_PATTERNS = [
+  {
+    regex: /^[A-Z0-9]{10} Confirmed\. Ksh50\.00 paid to .+?\. on \d{1,2}\/\d{1,2}\/\d{2} at \d{1,2}:\d{2} (AM|PM)\.New M-PESA balance is Ksh[\d,]+\.\d{2}\. Transaction cost, Ksh[\d,]+\.\d{2}\. Amount you can transact within the day is [\d,]+\.\d{2}\..*$/i,
+    planKey: "S60",
+    label: "2 Months Access",
+    days: 60,
+    amount: 50
+  },
+  {
+    regex: /^[A-Z0-9]{10} Confirmed\. Ksh80\.00 paid to .+?\. on \d{1,2}\/\d{1,2}\/\d{2} at \d{1,2}:\d{2} (AM|PM)\.New M-PESA balance is Ksh[\d,]+\.\d{2}\. Transaction cost, Ksh[\d,]+\.\d{2}\. Amount you can transact within the day is [\d,]+\.\d{2}\..*$/i,
+    planKey: "S120",
+    label: "4 Months Access",
+    days: 120,
+    amount: 80
+  }
+];
+
+// Track used M-Pesa transaction codes — Firestore (global) + localStorage (fallback)
+async function isMpesaTxUsed(txCode) {
+  let used = JSON.parse(localStorage.getItem("s_mpesa_tx")) || {};
+  if (used[txCode]) return true;
+  try {
+    let docRef = window._fbDoc(window._fbDb, "mpesa_transactions", txCode);
+    let docSnap = await window._fbGetDoc(docRef);
+    return docSnap.exists();
+  } catch(e) { return false; }
+}
+async function markMpesaTxUsed(txCode) {
+  let used = JSON.parse(localStorage.getItem("s_mpesa_tx")) || {};
+  used[txCode] = Date.now();
+  localStorage.setItem("s_mpesa_tx", JSON.stringify(used));
+  try {
+    let docRef = window._fbDoc(window._fbDb, "mpesa_transactions", txCode);
+    await window._fbSetDoc(docRef, { usedAt: Date.now(), usedBy: localStorage.getItem("currentUser") || "unknown" });
+  } catch(e) { console.warn("Firestore write failed:", e); }
+}
+
+// Countdown interval reference (so we can clear it)
+let _codeCountdownTimer = null;
+
+function startCodeCountdown(expiresAt) {
+  if (_codeCountdownTimer) clearInterval(_codeCountdownTimer);
+  const countdownEl = document.getElementById("expiryCountdown");
+  const rewardBox = document.getElementById("rewardBox");
+  const expiryBanner = document.getElementById("codeExpiry");
+
+  _codeCountdownTimer = setInterval(() => {
+    let remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+    if (countdownEl) countdownEl.textContent = remaining;
+    if (remaining <= 10 && expiryBanner) expiryBanner.style.background = "#fee2e2";
+    if (remaining === 0) {
+      clearInterval(_codeCountdownTimer);
+      // Grey out the reward box and show expiry message
+      if (rewardBox) {
+        rewardBox.style.opacity = "0.5";
+        if (expiryBanner) {
+          expiryBanner.style.background = "#fee2e2";
+          expiryBanner.style.color = "#991b1b";
+          expiryBanner.innerHTML = "❌ Code expired. Contact Support team to get a new code.";
+        }
+      }
+    }
+  }, 1000);
+}
+
+async function verifyMpesaMessage() {
+  let msg = document.getElementById("mpesaMessage").value.trim();
+  let errEl = document.getElementById("mpesaError");
+  let rewardBox = document.getElementById("rewardBox");
+
+  errEl.style.display = "none";
+  rewardBox.style.display = "none";
+  rewardBox.style.opacity = "1";
+  document.getElementById("copyConfirm").style.display = "none";
+  if (_codeCountdownTimer) clearInterval(_codeCountdownTimer);
+
+  if (!msg) {
+    errEl.textContent = "❌ Please paste your M-Pesa confirmation message.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  let txMatch = msg.match(/^([A-Z0-9]{10})/);
+  let txCode = txMatch ? txMatch[1] : null;
+
+  let verifyBtn = document.getElementById("verifyMpesaBtn");
+  if (verifyBtn) { verifyBtn.textContent = "Checking..."; verifyBtn.disabled = true; }
+
+  if (txCode && await isMpesaTxUsed(txCode)) {
+    errEl.textContent = "❌ This M-Pesa transaction has already been used to generate a code.";
+    errEl.style.display = "block";
+    if (verifyBtn) { verifyBtn.textContent = "Verify Payment"; verifyBtn.disabled = false; }
+    return;
+  }
+
+  let matched = null;
+  for (let p of MPESA_PATTERNS) {
+    if (p.regex.test(msg)) { matched = p; break; }
+  }
+
+  if (!matched) {
+    errEl.textContent = "❌ Message does not match a valid M-Pesa payment. Please paste the exact SMS received from M-Pesa.";
+    errEl.style.display = "block";
+    if (verifyBtn) { verifyBtn.textContent = "Verify Payment"; verifyBtn.disabled = false; }
+    return;
+  }
+
+  // Mark M-Pesa tx used (Firestore + localStorage)
+  if (txCode) await markMpesaTxUsed(txCode);
+
+  // Generate a random one-time code for THIS user
+  let currentUser = localStorage.getItem("currentUser");
+  let code = generateAccessCode(matched.planKey, currentUser);
+  let pending = JSON.parse(localStorage.getItem("s_pending_codes")) || {};
+  let expiresAt = pending[code] ? pending[code].expiresAt : Date.now() + CODE_TTL_MS;
+
+  // Display
+  document.getElementById("rewardCode").textContent = code;
+  document.getElementById("rewardPlan").textContent = `✅ ${matched.label} — KSh ${matched.amount} | Valid for ${matched.days} day${matched.days > 1 ? "s" : ""}`;
+  document.getElementById("expiryCountdown").textContent = "60";
+  document.getElementById("codeExpiry").style.background = "#fef9c3";
+  document.getElementById("codeExpiry").style.color = "#854d0e";
+  document.getElementById("codeExpiry").innerHTML = `⏱️ Code expires in: <span id="expiryCountdown">60</span>s — Enter it now!`;
+  rewardBox.style.display = "block";
+  if (verifyBtn) { verifyBtn.textContent = "Verify Payment"; verifyBtn.disabled = false; }
+
+  startCodeCountdown(expiresAt);
+  rewardBox.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function copyRewardCode() {
+  let code = document.getElementById("rewardCode").textContent;
+  if (!code) return;
+  navigator.clipboard.writeText(code).then(() => {
+    document.getElementById("copyConfirm").style.display = "block";
+    document.getElementById("copyCodeBtn").textContent = "✅ Copied!";
+    setTimeout(() => {
+      document.getElementById("copyCodeBtn").textContent = "📋 Copy Code";
+    }, 2500);
+  }).catch(() => {
+    // Fallback for older browsers
+    let ta = document.createElement("textarea");
+    ta.value = code;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    document.getElementById("copyConfirm").style.display = "block";
+  });
+}
+
+function openPaymentModal() {
+  document.getElementById("paymentModal").style.display = "flex";
+  document.getElementById("mpesaMessage").value = "";
+  document.getElementById("mpesaError").style.display = "none";
+  document.getElementById("rewardBox").style.display = "none";
+  document.getElementById("copyConfirm").style.display = "none";
+}
+function closePaymentModal() {
+  document.getElementById("paymentModal").style.display = "none";
+}
+
+// ===================== FORGOT PASSWORD =====================
+function forgotPassword() {
+  document.getElementById("forgotModal").style.display = "flex";
+  document.getElementById("forgotIdentifier").value = "";
+  document.getElementById("forgotError").style.display = "none";
+  document.getElementById("forgotSuccess").style.display = "none";
+  let btn = document.getElementById("forgotSubmitBtn");
+  btn.textContent = "Send Reset Link";
+  btn.disabled = false;
+}
+function closeForgotModal() {
+  document.getElementById("forgotModal").style.display = "none";
+}
+async function submitForgotPassword() {
+  let emailEl = document.getElementById("forgotIdentifier");
+  let errEl = document.getElementById("forgotError");
+  let successEl = document.getElementById("forgotSuccess");
+  let btn = document.getElementById("forgotSubmitBtn");
+
+  errEl.style.display = "none";
+  successEl.style.display = "none";
+
+  let email = emailEl.value.trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errEl.textContent = "Please enter a valid email address.";
+    errEl.style.display = "block";
+    return;
+  }
+
+  btn.textContent = "Sending...";
+  btn.disabled = true;
+
+  try {
+    await window._fbSendPasswordResetEmail(window._fbAuth, email);
+    successEl.textContent = "✅ Reset link sent! Check your email inbox (and spam folder).";
+    successEl.style.display = "block";
+    emailEl.value = "";
+    btn.textContent = "Sent ✓";
+  } catch(error) {
+    let msg = "Failed to send reset link. Please try again.";
+    if (error.code === "auth/user-not-found" || error.code === "auth/invalid-credential") msg = "No account found with this email.";
+    else if (error.code === "auth/invalid-email") msg = "Please enter a valid email address.";
+    else if (error.code === "auth/too-many-requests") msg = "Too many attempts. Please wait a moment and try again.";
+    errEl.textContent = msg;
+    errEl.style.display = "block";
+    btn.textContent = "Send Reset Link";
+    btn.disabled = false;
+  }
+}
+</script>
+</body></html>
